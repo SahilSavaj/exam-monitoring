@@ -7,11 +7,9 @@ import numpy as np
 from deepface import DeepFace
 from PIL import Image
 from io import BytesIO
-import model
-
 
 folder=os.path.dirname(__file__)
-
+faces  = cv.CascadeClassifier(os.path.join(folder,'haarcascade_frontalface_default.xml'))
 #from videocapture import *
 
 #connect to postgreSQL database
@@ -46,12 +44,13 @@ def decrypter(password):
 
 #Load image to database
 def store(pic,name):
-    '''def digital_to_binary(image_name):
-        # Convert digital data to binary format
-        with open(image_name, 'rb') as file:
-            binaryData = file.read()
-        return binaryData'''
-
+    gray_face = cv.cvtColor(pic,cv.COLOR_BGR2GRAY)
+    face = faces.detectMultiScale(gray_face,1.1,4)
+    for (x,y,w,h) in face:
+        pic = pic[y:y+h,x:x+w]
+    '''cv.imshow("test",pic)
+    cv.waitKey(0)
+    cv.destroyAllWindows()'''
     rect,pict =cv.imencode('.jpg',pic)
     picture=pict.tobytes()
     cursor=db.cursor()   
@@ -76,11 +75,16 @@ def receive(name_face):
     #im1=im.convert("RGB")
     #img=np.array(im1.getdata())
     opencvImage = cv.cvtColor(np.array(im), cv.COLOR_RGB2BGR)
+    
     return opencvImage
 
 #Login check
-'''def login(train,test):
+def login(train,test):
     global ex
+    gray_face = cv.cvtColor(test,cv.COLOR_BGR2GRAY)
+    face = faces.detectMultiScale(gray_face,1.1,4)
+    for (x,y,w,h) in face:
+        test = test[y:y+h,x:x+w]
     j= DeepFace.verify(img1_path = train, img2_path =test,enforce_detection=False)
     print(j['verified'])
     ans=j['distance']
@@ -88,13 +92,13 @@ def receive(name_face):
     if ans>0.1:
         ex=0
     elif ans<=0.1:
-        print("Exam de")
+        print("User Verified")
         ex=1
-    return ex'''
+    return ex
 
-def login(train,test,name):
+'''def login(train,test,name):
     y=model.face(train,test,name)
-    print(y)
+    print(y)'''
 #load Image from database
 
 #video function
@@ -180,6 +184,7 @@ verification=0
                     b'Content-Type: image/jpeg\r\n\r\n'+frame+b'\r\n')'''
         
 def camera(video,name):
+    global frame,url
     url=cv.VideoCapture(0)
     global capture,verification,verified
     while True:
@@ -192,15 +197,6 @@ def camera(video,name):
                 cv.imwrite(p,frame)
                 path='C:\SEM-5\Strike\code\shots\{na}.jpg'.format(na=name)'''
                 store(frame,name)
-            
-            elif(verification):
-                verification=0
-                verified=login(receive(name),frame,name)
-                print(verified)
-                if verified:
-                    return redirect('/exam')
-                
-                
 
             else:
                 ret,jpeg=cv.imencode('.jpg',frame)
@@ -210,6 +206,7 @@ def camera(video,name):
             #except Exception as e:
                 #pass
         else:
+            url.release()
             pass
     
  
@@ -305,23 +302,44 @@ def cap():
             return render_template('reg_photo.html')
     return render_template('homepage.html')
 
-@signup.route("/verif",methods=['POST','GET'])
+@signup.route("/verif",methods=['POST'])
 def verif():
-    global camera,verification
-    if request.method=="POST":
-        if request.form.get('click')=='Verify':
-    
-            verification=1
-        elif request.method=='GET':
+    global camera
+    if request.form.get('click')=='Verify':
+        c=login(receive(temp_name),frame)
+        print(c)
+        if c==1:
+            url.release()
+            cv.destroyAllWindows()
+            if usertype=='admin':
+                return render_template('dashboard.html')
+            elif usertype=='student':
+                return render_template('examinst.html')
+        else:
             return render_template('face_reg.html')
     return render_template("face_reg.html")
+
+@signup.route("/verif",methods=['GET'])
+def verifd():
+    return render_template("face_reg.html")
     
-    
-@signup.route("/exam",methods=['POST','GET'])
+@signup.route("/exam",methods=['POST'])
+def exampage():
+    if request.method=='POST':
+        return render_template('examinst.html')
+    return render_template('examinst.html')
+
+@signup.route("/startexam",methods=['POST'])
 def exam():
+    if request.method=='POST':
+        return render_template('exam.html')
     return render_template('exam.html')
 
-
+@signup.route("/submit",methods=['POST'])
+def submit():
+    if request.method=='POST':
+        return render_template('result.html')
+    return render_template('result.html')
 
 if __name__ == "__main__":
     signup.run()
